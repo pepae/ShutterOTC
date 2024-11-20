@@ -1,5 +1,13 @@
 # ShutterOTC Documentation
 
+## Introduction
+
+**ShutterOTC** is a threshold encrypted Over-The-Counter (OTC) negotiation mechanism that allows buyers and sellers to securely submit bids for assets without revealing their prices until a specified deadline. It leverages threshold encryption provided by [NanoShutter](https://nanoshutter.staging.shutter.network/) to ensure that bids remain confidential until the decryption key is released.
+
+![ezgif-3-00df59f919](https://github.com/user-attachments/assets/eabf6fb8-64dc-4a3b-b1f0-92a2d06f63e5)
+
+---
+
 ## Table of Contents
 
 1. [Introduction](#introduction)
@@ -20,12 +28,6 @@
 11. [Security Considerations](#security-considerations)
 12. [Troubleshooting](#troubleshooting)
 13. [Conclusion](#conclusion)
-
----
-
-## Introduction
-
-**ShutterOTC** is a threshold encrypted Over-The-Counter (OTC) negotiation mechanism that allows buyers and sellers to securely submit bids for assets without revealing their prices until a specified deadline. It leverages threshold encryption provided by [NanoShutter](https://nanoshutter.staging.shutter.network/) to ensure that bids remain confidential until the decryption key is released.
 
 ---
 
