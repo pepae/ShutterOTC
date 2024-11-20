@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ShutterOTC: A Threshold Encrypted OTC Negotiation Mechanism</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f2f2f2;
+            color: #333;
+        }
+        h1, h2, h3 {
+            font-family: 'Arial Black', sans-serif;
+            color: #333;
+            text-align: center;
+        }
+        .container {
+            width: 800px;
+            margin: 0 auto;
+        }
+        .form-section, .status-section {
+            background-color: #fff;
+            border: 1px solid #ccc;
+            padding: 30px;
+            margin: 20px 0;
+            border-radius: 10px;
+        }
+        .status-section {
+            background-color: #f9f9f9;
+        }
+        #countdown {
+            font-weight: bold;
+            color: #d9534f;
+            text-align: center;
+        }
+        .matched {
+            color: green;
+            font-weight: bold;
+        }
+        .unmatched {
+            color: red;
+            font-weight: bold;
+        }
+        .pending {
+            color: orange;
+            font-weight: bold;
+        }
+        label {
+            display: inline-block;
+            width: 120px;
+        }
+        input[type="text"], input[type="number"], select {
+            width: 200px;
+            padding: 5px;
+            margin-bottom: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            font-family: Arial, sans-serif;
+            background-color: #333;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        button:hover {
+            background-color: #555;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        ul li {
+            background-color: #e9e9e9;
+            margin: 5px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .bid-role {
+            font-weight: bold;
+            color: #333;
+        }
+        .ciphertext, .decrypted-price {
+            font-family: 'Courier New', Courier, monospace;
+            word-break: break-all;
+            color: #555;
+        }
+        .encryption-info {
+            margin: 10px 0;
+        }
+        .center-text {
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ShutterOTC: A Threshold Encrypted OTC Negotiation Mechanism</h1>
+        <p class="center-text">A trade is matched if any buyer's price is greater than or equal to any seller's price.</p>
+        <div class="form-section">
+            <h2>Submit Your Bid</h2>
+            <form id="submissionForm">
+                <label for="sessionId">Session ID:</label>
+                <input type="text" id="sessionId" name="sessionId" required>
+                <br>
+                <label for="role">Role:</label>
+                <select id="role" name="role" required>
+                    <option value="">Select your role</option>
+                    <option value="buyer">Buyer</option>
+                    <option value="seller">Seller</option>
+                </select>
+                <br>
+                <label for="assetType">Asset Type:</label>
+                <input type="text" id="assetType" name="assetType" placeholder="e.g., BTC/USD" required>
+                <br>
+                <label for="price">Price (USD):</label>
+                <input type="number" id="price" name="price" step="0.01" required>
+                <br><br>
+                <div class="center-text">
+                    <button type="submit">Submit Bid</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="status-section">
+            <h2>Trade Status</h2>
+            <p id="statusMessage" class="center-text">No trade session started.</p>
+            <p id="encryptionMessage" class="center-text"></p>
+            <p id="deadlineMessage" class="center-text"></p>
+            <p id="countdown" class="center-text"></p>
+            <p id="submissionStatus" class="center-text"></p>
+            <div id="bidsList"></div>
+            <p id="result" class="center-text"></p>
+        </div>
+    </div>
+
+    <script>
+        let sessionId = null;
+        let deadline = null;
+        let countdownInterval = null;
+
+        document.getElementById('submissionForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            sessionId = document.getElementById('sessionId').value.trim();
+            const role = document.getElementById('role').value;
+            const assetType = document.getElementById('assetType').value.trim();
+            const price = document.getElementById('price').value;
+
+            if (!sessionId || !role || !price || !assetType) {
+                alert('Please fill in all fields.');
+                return;
+            }
+
+            const url = '/submit/bid';
+
+            // Since assetType is just in the frontend, we don't need to send it to the backend
+            fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId: sessionId, price: price, role: role })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    deadline = data.deadline;
+                    document.getElementById('statusMessage').textContent = `Trade Session ID: ${sessionId}`;
+                    document.getElementById('encryptionMessage').textContent = 'Encryption requested from Shutter.';
+                    document.getElementById('deadlineMessage').textContent = `Decryption key will be released at: ${new Date(deadline * 1000).toLocaleString()}`;
+                    startCountdown();
+                    checkStatus();
+                } else {
+                    alert(data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while submitting your bid.');
+            });
+        });
+
+        function startCountdown() {
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
+
+            countdownInterval = setInterval(() => {
+                const now = Math.floor(Date.now() / 1000);
+                const remaining = deadline - now;
+
+                if (remaining > 0) {
+                    document.getElementById('countdown').textContent = `Time remaining: ${remaining} seconds`;
+                    checkStatus(); // Check status periodically
+                } else {
+                    document.getElementById('countdown').textContent = 'Deadline reached. Processing...';
+                    clearInterval(countdownInterval);
+                    checkStatus();
+                }
+            }, 1000);
+        }
+
+        function checkStatus() {
+            if (!sessionId) return;
+
+            fetch(`/trade/status/${sessionId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const status = data.status;
+                    if (!deadline && data.deadline) {
+                        deadline = data.deadline;
+                        document.getElementById('deadlineMessage').textContent = `Decryption key will be released at: ${new Date(deadline * 1000).toLocaleString()}`;
+                    }
+                    displayBids(data.bids, status, data);
+                    if (status === 'pending') {
+                        document.getElementById('submissionStatus').textContent = `Trade is pending. Waiting for deadline to be reached.`;
+                    } else {
+                        document.getElementById('submissionStatus').textContent = '';
+                        if (status === 'matched') {
+                            document.getElementById('result').innerHTML = `
+                                <p class="matched">Trade Status: Matched</p>
+                                <p>Matched Buyer's Price: $${data.matchedBuyerPrice}</p>
+                                <p>Matched Seller's Price: $${data.matchedSellerPrice}</p>
+                            `;
+                        } else {
+                            document.getElementById('result').innerHTML = `<p class="unmatched">Trade Status: Unmatched</p>`;
+                        }
+                    }
+                } else {
+                    alert(data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while checking trade status.');
+            });
+        }
+
+        function displayBids(bids, status, data) {
+            const bidsListDiv = document.getElementById('bidsList');
+            bidsListDiv.innerHTML = '<h3>Bids:</h3>';
+            if (bids && bids.length > 0) {
+                const list = document.createElement('ul');
+                bids.forEach(bid => {
+                    const listItem = document.createElement('li');
+                    listItem.innerHTML = `
+                        <span class="bid-role">${bid.role.charAt(0).toUpperCase() + bid.role.slice(1)}:</span>
+                        <br>
+                        Time: ${new Date(bid.timestamp * 1000).toLocaleString()}
+                        <br>
+                        Ciphertext: <span class="ciphertext">${bid.encryptedPrice}</span>
+                    `;
+                    if (status !== 'pending') {
+                        // Decryption has occurred
+                        const decryptedPrice = bid.decryptedPrice !== undefined ? `$${bid.decryptedPrice}` : 'N/A';
+                        listItem.innerHTML += `
+                            <br>
+                            Decrypted Price: <span class="decrypted-price">${decryptedPrice}</span>
+                        `;
+                    }
+                    list.appendChild(listItem);
+                });
+                bidsListDiv.appendChild(list);
+            } else {
+                bidsListDiv.innerHTML += '<p>No bids yet.</p>';
+            }
+        }
+    </script>
+</body>
+</html>
