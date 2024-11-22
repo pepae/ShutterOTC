@@ -36,6 +36,7 @@ db.run(`CREATE TABLE IF NOT EXISTS bids (
     sessionId TEXT,
     role TEXT,
     encryptedPrice TEXT,
+    decryptedPrice REAL,
     timestamp INTEGER,
     FOREIGN KEY(sessionId) REFERENCES trades(sessionId)
 );`);
@@ -49,9 +50,9 @@ function getOrSetDeadline(sessionId, callback) {
             // Deadline exists
             callback(null, row.timestamp);
         } else {
-            // Set a new deadline (e.g., 60 seconds from now)
+            // Set a new deadline (e.g., 15 seconds from now)
             const currentTime = Math.floor(Date.now() / 1000);
-            const deadline = currentTime + 60; // 60 seconds from now
+            const deadline = currentTime + 15; // 15 seconds from now
             // Insert the new trade
             db.run(`INSERT INTO trades (sessionId, timestamp, status) VALUES (?, ?, ?)`, [sessionId, deadline, 'pending'], function (err) {
                 if (err) {
@@ -123,9 +124,10 @@ app.get('/trade/status/:sessionId', (req, res) => {
             return res.status(404).json({ success: false, message: 'Trade session not found.' });
         }
 
+        const BUFFER_TIME = 5; // 5 seconds buffer
         const currentTime = Math.floor(Date.now() / 1000);
-        if (currentTime < trade.timestamp) {
-            // Get bids and their ciphertexts
+        if (currentTime < trade.timestamp + BUFFER_TIME) {
+            // Deadline (with buffer) not reached yet
             db.all(`SELECT role, encryptedPrice, timestamp FROM bids WHERE sessionId = ?`, [sessionId], (err, bids) => {
                 if (err) {
                     console.error(err);
@@ -145,7 +147,7 @@ app.get('/trade/status/:sessionId', (req, res) => {
 
         if (trade.status !== 'pending') {
             // Already decrypted and processed
-            db.all(`SELECT role, encryptedPrice, timestamp FROM bids WHERE sessionId = ?`, [sessionId], (err, bids) => {
+            db.all(`SELECT role, encryptedPrice, decryptedPrice, timestamp FROM bids WHERE sessionId = ?`, [sessionId], (err, bids) => {
                 if (err) {
                     console.error(err);
                     res.status(500).json({ success: false, message: 'Database error.' });
@@ -181,6 +183,11 @@ app.get('/trade/status/:sessionId', (req, res) => {
                             timestamp: trade.timestamp
                         });
                         const price = parseFloat(decryptResponse.data.message);
+
+                        // Update the bid with the decrypted price
+                        db.run(`UPDATE bids SET decryptedPrice = ? WHERE id = ?`, [price, bid.id]);
+                        bid.decryptedPrice = price; // Add decrypted price to bid object
+
                         if (bid.role === 'buyer') {
                             buyerPrices.push(price);
                         } else if (bid.role === 'seller') {

@@ -193,7 +193,10 @@
                 } else {
                     document.getElementById('countdown').textContent = 'Deadline reached. Processing...';
                     clearInterval(countdownInterval);
-                    checkStatus();
+                    // Wait for an additional 5 seconds before checking status
+                    setTimeout(() => {
+                        checkStatus();
+                    }, 5000);
                 }
             }, 1000);
         }
